@@ -1,0 +1,231 @@
+import customtkinter as ctk
+from queue import PriorityQueue
+
+# ==========================================
+# 1. Graph & Movie Database (Fake Data Only)
+# ==========================================
+
+genres_data = {
+    "Action": {
+        "movies": [
+            {"title": "Movie 1", "duration": "2h 00m"},
+            {"title": "Movie 2", "duration": "1h 41m"},
+            {"title": "Movie 3", "duration": "2h 12m"}
+        ],
+        "coords": (2, 8)
+    },
+    "Historical": {
+        "movies": [
+            {"title": "Movie 4", "duration": "2h 35m"},
+            {"title": "Movie 5", "duration": "2h 58m"},
+            {"title": "Movie 6", "duration": "3h 00m"}
+        ],
+        "coords": (5, 5)
+    },
+    "Romance": {
+        "movies": [
+            {"title": "Movie 7", "duration": "2h 03m"},
+            {"title": "Movie 8", "duration": "2h 08m"},
+            {"title": "Movie 9", "duration": "3h 14m"}
+        ],
+        "coords": (8, 2)
+    },
+    "Horror": {
+        "movies": [
+            {"title": "Movie 10", "duration": "1h 52m"},
+            {"title": "Movie 11", "duration": "2h 15m"},
+            {"title": "Movie 12", "duration": "1h 30m"}
+        ],
+        "coords": (1, 1)
+    },
+    "Sci-Fi": {
+        "movies": [
+            {"title": "Movie 13", "duration": "2h 49m"},
+            {"title": "Movie 14", "duration": "2h 28m"},
+            {"title": "Movie 15", "duration": "2h 16m"}
+        ],
+        "coords": (3, 9)
+    },
+    "Drama": {
+        "movies": [
+            {"title": "Movie 16", "duration": "2h 22m"},
+            {"title": "Movie 17", "duration": "2h 22m"},
+            {"title": "Movie 18", "duration": "2h 55m"}
+        ],
+        "coords": (6, 4)
+    }
+}
+
+# Graph connections between genres
+genre_graph = {
+    "Action": [("Sci-Fi", 1), ("Historical", 2), ("Horror", 4)],
+    "Historical": [("Action", 2), ("Drama", 1)],
+    "Romance": [("Drama", 2)],
+    "Horror": [("Action", 4), ("Sci-Fi", 3)],
+    "Sci-Fi": [("Action", 1), ("Horror", 3)],
+    "Drama": [("Historical", 1), ("Romance", 2)]
+}
+
+# ==========================================
+# 2. BFS Algorithm with Logging
+# ==========================================
+
+def search_bfs_with_log(start, target):
+    queue = [[start]]
+    visited = {start}
+    log_steps = []
+
+    log_steps.append(f"Start BFS from [{start}]")
+
+    while queue:
+        path = queue.pop(0)
+        current = path[-1]
+
+        log_steps.append(f"Visiting: {current}")
+
+        if current == target:
+            log_steps.append("Target found using BFS")
+            return path, log_steps
+
+        log_steps.append(f"Neighbors: {[n for n, _ in genre_graph.get(current, [])]}")
+
+        for neighbor, _ in genre_graph.get(current, []):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                new_path = list(path)
+                new_path.append(neighbor)
+                queue.append(new_path)
+                log_steps.append(f"Added to queue: {neighbor}")
+
+    return None, log_steps
+
+
+# ==========================================
+# 3. A* Algorithm with Logging
+# ==========================================
+
+def get_heuristic(current, target):
+    x1, y1 = genres_data[current]["coords"]
+    x2, y2 = genres_data[target]["coords"]
+    return round(((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5, 2)
+
+
+def search_astar_with_log(start, target):
+    pq = PriorityQueue()
+    pq.put((get_heuristic(start, target), [start]))
+
+    g_score = {genre: float('inf') for genre in genres_data}
+    g_score[start] = 0
+
+    log_steps = []
+    log_steps.append(f"Start A* from [{start}]")
+
+    while not pq.empty():
+        f, path = pq.get()
+        current = path[-1]
+
+        log_steps.append(f"Checking: {current}")
+
+        if current == target:
+            log_steps.append("Target found using A*")
+            return path, log_steps
+
+        for neighbor, weight in genre_graph.get(current, []):
+            tentative_g = g_score[current] + weight
+
+            if tentative_g < g_score[neighbor]:
+                g_score[neighbor] = tentative_g
+                h = get_heuristic(neighbor, target)
+                f_score = tentative_g + h
+
+                new_path = list(path)
+                new_path.append(neighbor)
+                pq.put((f_score, new_path))
+
+                log_steps.append(f"{neighbor} -> g={tentative_g}, h={h}, f={f_score}")
+
+    return None, log_steps
+
+
+# ==========================================
+# 4. GUI Application
+# ==========================================
+
+class MovieSearchApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Movie Search System (AI Graph)")
+        self.geometry("850x620")
+        ctk.set_appearance_mode("dark")
+
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+        # Title
+        self.title_label = ctk.CTkLabel(
+            self,
+            text="Movie Search System",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        self.title_label.grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=250)
+        self.sidebar.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+        self.target_combo = ctk.CTkComboBox(
+            self.sidebar,
+            values=list(genres_data.keys())
+        )
+        self.target_combo.pack(pady=20)
+        self.target_combo.set("Romance")
+
+        self.algo_var = ctk.StringVar(value="BFS")
+
+        self.bfs_radio = ctk.CTkRadioButton(
+            self.sidebar, text="BFS", variable=self.algo_var, value="BFS"
+        )
+        self.bfs_radio.pack(pady=10)
+
+        self.astar_radio = ctk.CTkRadioButton(
+            self.sidebar, text="A*", variable=self.algo_var, value="A*"
+        )
+        self.astar_radio.pack(pady=10)
+
+        self.search_btn = ctk.CTkButton(
+            self.sidebar,
+            text="Search",
+            command=self.run_search
+        )
+        self.search_btn.pack(pady=20)
+
+        # Main area
+        self.main = ctk.CTkFrame(self)
+        self.main.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+
+        self.output = ctk.CTkTextbox(self.main)
+        self.output.pack(fill="both", expand=True, padx=10, pady=10)
+
+    def run_search(self):
+        start = "Action"
+        target = self.target_combo.get()
+        algo = self.algo_var.get()
+
+        if algo == "BFS":
+            path, log = search_bfs_with_log(start, target)
+        else:
+            path, log = search_astar_with_log(start, target)
+
+        self.output.delete("1.0", "end")
+
+        if path:
+            self.output.insert("end", "Path: " + " -> ".join(path) + "\n\n")
+            self.output.insert("end", "\n".join(log))
+        else:
+            self.output.insert("end", "No path found")
+
+
+if __name__ == "__main__":
+    app = MovieSearchApp()
+    app.mainloop()
